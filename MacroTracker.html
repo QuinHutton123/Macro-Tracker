@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Macro Tracker</title>
+<style>
+  :root {
+    --bg:       #0f0f11;
+    --surface:  #1a1a1f;
+    --card:     #22222a;
+    --border:   #2e2e3a;
+    --accent:   #7c6af7;
+    --accent2:  #5ed3a0;
+    --warn:     #f7a26a;
+    --danger:   #f76a6a;
+    --text:     #f0eff8;
+    --muted:    #8a8a9a;
+    --cal-clr:  #f7a26a;
+    --pro-clr:  #5ed3a0;
+    --carb-clr: #7c6af7;
+    --fat-clr:  #f7d96a;
+    --radius:   16px;
+    --radius-sm:10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+    min-height: 100dvh;
+    padding-bottom: 90px;
+    overscroll-behavior: none;
+  }
+
+  /* ── Header ── */
+  .header {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(15,15,17,0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .header-row { display: flex; justify-content: space-between; align-items: center; }
+  .header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+  .header h1 span { color: var(--accent); }
+  .date-label { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .sync-btn {
+    background: var(--card); border: 1px solid var(--border);
+    color: var(--muted); border-radius: 20px;
+    padding: 6px 14px; font-size: 13px; cursor: pointer;
+    transition: all 0.2s;
+  }
+  .sync-btn:active { transform: scale(0.95); color: var(--accent); }
+
+  /* ── Nav ── */
+  .nav {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+    background: rgba(26,26,31,0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border);
+    display: flex; padding: 10px 0 20px;
+  }
+  .nav-btn {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    gap: 4px; background: none; border: none; color: var(--muted);
+    font-size: 11px; cursor: pointer; padding: 4px 0;
+    transition: color 0.2s;
+  }
+  .nav-btn.active { color: var(--accent); }
+  .nav-btn svg { width: 22px; height: 22px; }
+
+  /* ── Pages ── */
+  .page { display: none; padding: 16px 16px 0; }
+  .page.active { display: block; }
+
+  /* ── Ring progress ── */
+  .rings-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 12px; margin-bottom: 16px;
+  }
+  .ring-card {
+    background: var(--card); border-radius: var(--radius);
+    border: 1px solid var(--border);
+    padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 10px;
+  }
+  .ring-card.wide {
+    grid-column: 1 / -1;
+    flex-direction: row; justify-content: space-between; padding: 16px 20px;
+  }
+  .ring-wrap { position: relative; width: 72px; height: 72px; flex-shrink: 0; }
+  .ring-wrap svg { transform: rotate(-90deg); }
+  .ring-track { fill: none; stroke: var(--border); stroke-width: 6; }
+  .ring-fill  { fill: none; stroke-width: 6; stroke-linecap: round;
+    transition: stroke-dashoffset 0.6s cubic-bezier(.4,0,.2,1); }
+  .ring-pct {
+    position: absolute; inset: 0; display: flex; align-items: center;
+    justify-content: center; font-size: 13px; font-weight: 700;
+  }
+  .ring-info { text-align: center; }
+  .ring-info.left { text-align: left; }
+  .ring-label { font-size: 12px; color: var(--muted); }
+  .ring-val   { font-size: 17px; font-weight: 700; margin-top: 2px; }
+  .ring-target{ font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+  /* ── Section headers ── */
+  .section-header {
+    font-size: 13px; font-weight: 600; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.8px;
+    margin: 20px 0 10px;
+  }
+
+  /* ── Log food ── */
+  .log-card {
+    background: var(--card); border-radius: var(--radius);
+    border: 1px solid var(--border); padding: 16px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+
+  /* Search */
+  .search-wrap { position: relative; }
+  .search-wrap input {
+    width: 100%; background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    color: var(--text); font-size: 15px; padding: 11px 14px 11px 38px;
+    outline: none; transition: border-color 0.2s;
+  }
+  .search-wrap input:focus { border-color: var(--accent); }
+  .search-icon {
+    position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+    color: var(--muted); pointer-events: none;
+  }
+  .search-icon svg { width: 16px; height: 16px; }
+
+  /* Dropdown */
+  .dropdown {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); overflow-y: auto; max-height: 200px;
+    margin-top: 4px; display: none;
+  }
+  .dropdown.open { display: block; }
+  .dropdown-item {
+    padding: 11px 14px; font-size: 14px; cursor: pointer;
+    border-bottom: 1px solid var(--border); display: flex; justify-content: space-between;
+    align-items: center; transition: background 0.15s;
+  }
+  .dropdown-item:last-child { border-bottom: none; }
+  .dropdown-item:active { background: var(--border); }
+  .item-cat {
+    font-size: 11px; padding: 2px 7px; border-radius: 20px;
+    font-weight: 600; flex-shrink: 0; margin-left: 8px;
+  }
+  .cat-Protein { background: #1a3a5c; color: #5ed3a0; }
+  .cat-Carbs   { background: #2a2050; color: #7c6af7; }
+  .cat-Fruit   { background: #3a2010; color: #f7a26a; }
+  .cat-Veggies { background: #1a3020; color: #5ed3a0; }
+  .cat-Fats    { background: #2a1a3a; color: #c4b5fd; }
+  .cat-Other   { background: #2a2a2a; color: #8a8a9a; }
+
+  /* Selected food preview */
+  .food-preview {
+    background: var(--surface); border-radius: var(--radius-sm);
+    padding: 11px 14px; font-size: 14px; font-weight: 600;
+    color: var(--accent); display: none;
+  }
+  .food-preview.visible { display: block; }
+
+  /* Handful stepper */
+  .stepper-row { display: flex; align-items: center; gap: 10px; }
+  .stepper-label { font-size: 13px; color: var(--muted); flex: 1; }
+  .stepper {
+    display: flex; align-items: center; gap: 0;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); overflow: hidden;
+  }
+  .stepper-btn {
+    width: 44px; height: 44px; background: none; border: none;
+    color: var(--text); font-size: 22px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+  }
+  .stepper-btn:active { background: var(--border); }
+  .stepper-val {
+    width: 48px; text-align: center; font-size: 17px;
+    font-weight: 700; color: var(--text);
+  }
+
+  /* Macro preview row */
+  .macro-preview {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 6px; background: var(--surface);
+    border-radius: var(--radius-sm); padding: 10px;
+  }
+  .mp-item { text-align: center; }
+  .mp-val  { font-size: 15px; font-weight: 700; }
+  .mp-lbl  { font-size: 10px; color: var(--muted); margin-top: 1px; }
+
+  /* Log button */
+  .log-btn {
+    width: 100%; padding: 14px; border-radius: var(--radius-sm);
+    background: var(--accent); border: none; color: #fff;
+    font-size: 16px; font-weight: 700; cursor: pointer;
+    transition: all 0.2s; letter-spacing: -0.2px;
+  }
+  .log-btn:active { transform: scale(0.98); opacity: 0.9; }
+  .log-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  /* ── Today's log entries ── */
+  .entry-list { display: flex; flex-direction: column; gap: 8px; }
+  .entry {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 12px 14px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .entry-left { flex: 1; min-width: 0; }
+  .entry-food { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .entry-sub  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .entry-cal  { font-size: 15px; font-weight: 700; color: var(--cal-clr); flex-shrink: 0; margin-left: 10px; }
+
+  .action-row { display: flex; gap: 8px; margin-top: 8px; }
+  .action-btn {
+    flex: 1; padding: 11px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border); background: var(--card);
+    color: var(--muted); font-size: 13px; font-weight: 600; cursor: pointer;
+    transition: all 0.2s;
+  }
+  .action-btn.danger { border-color: #3a1515; color: var(--danger); }
+  .action-btn:active { opacity: 0.7; transform: scale(0.98); }
+
+  /* ── Charts page ── */
+  .chart-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px; margin-bottom: 12px;
+  }
+  .chart-title { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 12px; }
+  .bar-chart { display: flex; flex-direction: column; gap: 6px; }
+  .bar-row { display: flex; align-items: center; gap: 8px; }
+  .bar-date { font-size: 11px; color: var(--muted); width: 36px; flex-shrink: 0; }
+  .bar-bg   { flex: 1; height: 20px; background: var(--surface); border-radius: 4px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+  .bar-lbl  { font-size: 11px; color: var(--muted); width: 36px; text-align: right; flex-shrink: 0; }
+
+  /* ── Empty states ── */
+  .empty {
+    text-align: center; padding: 32px 20px; color: var(--muted);
+    font-size: 14px; line-height: 1.6;
+  }
+  .empty-icon { font-size: 36px; margin-bottom: 10px; }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--card); border: 1px solid var(--border);
+    color: var(--text); padding: 10px 20px; border-radius: 20px;
+    font-size: 14px; font-weight: 500; opacity: 0;
+    transition: all 0.3s; pointer-events: none; white-space: nowrap; z-index: 100;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.success { border-color: var(--accent2); color: var(--accent2); }
+  .toast.error   { border-color: var(--danger); color: var(--danger); }
+
+  /* ── Spinner ── */
+  .spinner {
+    width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.2);
+    border-top-color: #fff; border-radius: 50%;
+    animation: spin 0.7s linear infinite; display: inline-block;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Settings page ── */
+  .settings-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden; margin-bottom: 12px;
+  }
+  .setting-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+  }
+  .setting-row:last-child { border-bottom: none; }
+  .setting-label { font-size: 14px; }
+  .setting-val   { font-size: 14px; font-weight: 600; color: var(--accent); }
+  .setting-input {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 14px; font-weight: 600;
+    padding: 6px 10px; width: 80px; text-align: center; outline: none;
+  }
+  .setting-input:focus { border-color: var(--accent); }
+  .save-btn {
+    width: 100%; padding: 14px; border-radius: var(--radius-sm);
+    background: var(--accent); border: none; color: #fff;
+    font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 4px;
+  }
+  .save-btn:active { opacity: 0.85; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-row">
+    <div>
+      <h1>🤚 <span>Macro</span>Track</h1>
+      <div class="date-label" id="dateLabel"></div>
+    </div>
+    <button class="sync-btn" onclick="loadAll()">↻ Sync</button>
+  </div>
+</div>
+
+<!-- Pages -->
+<div id="page-log" class="page active">
+
+  <!-- Rings -->
+  <div class="rings-grid" id="ringsGrid">
+    <div class="ring-card wide">
+      <div class="ring-wrap">
+        <svg width="72" height="72" viewBox="0 0 72 72">
+          <circle class="ring-track" cx="36" cy="36" r="30"/>
+          <circle class="ring-fill" id="ring-cal" cx="36" cy="36" r="30"
+            stroke="var(--cal-clr)" stroke-dasharray="188.5" stroke-dashoffset="188.5"/>
+        </svg>
+        <div class="ring-pct" id="pct-cal" style="color:var(--cal-clr)">0%</div>
+      </div>
+      <div class="ring-info left">
+        <div class="ring-label">Calories</div>
+        <div class="ring-val" id="val-cal" style="color:var(--cal-clr)">0</div>
+        <div class="ring-target" id="tgt-cal">/ 2800 kcal</div>
+      </div>
+    </div>
+    <div class="ring-card">
+      <div class="ring-wrap">
+        <svg width="72" height="72" viewBox="0 0 72 72">
+          <circle class="ring-track" cx="36" cy="36" r="30"/>
+          <circle class="ring-fill" id="ring-pro" cx="36" cy="36" r="30"
+            stroke="var(--pro-clr)" stroke-dasharray="188.5" stroke-dashoffset="188.5"/>
+        </svg>
+        <div class="ring-pct" id="pct-pro" style="color:var(--pro-clr)">0%</div>
+      </div>
+      <div class="ring-info">
+        <div class="ring-label">Protein</div>
+        <div class="ring-val" id="val-pro" style="color:var(--pro-clr)">0g</div>
+        <div class="ring-target" id="tgt-pro">/ 170g</div>
+      </div>
+    </div>
+    <div class="ring-card">
+      <div class="ring-wrap">
+        <svg width="72" height="72" viewBox="0 0 72 72">
+          <circle class="ring-track" cx="36" cy="36" r="30"/>
+          <circle class="ring-fill" id="ring-carb" cx="36" cy="36" r="30"
+            stroke="var(--carb-clr)" stroke-dasharray="188.5" stroke-dashoffset="188.5"/>
+        </svg>
+        <div class="ring-pct" id="pct-carb" style="color:var(--carb-clr)">0%</div>
+      </div>
+      <div class="ring-info">
+        <div class="ring-label">Carbs</div>
+        <div class="ring-val" id="val-carb" style="color:var(--carb-clr)">0g</div>
+        <div class="ring-target" id="tgt-carb">/ 320g</div>
+      </div>
+    </div>
+    <div class="ring-card">
+      <div class="ring-wrap">
+        <svg width="72" height="72" viewBox="0 0 72 72">
+          <circle class="ring-track" cx="36" cy="36" r="30"/>
+          <circle class="ring-fill" id="ring-fat" cx="36" cy="36" r="30"
+            stroke="var(--fat-clr)" stroke-dasharray="188.5" stroke-dashoffset="188.5"/>
+        </svg>
+        <div class="ring-pct" id="pct-fat" style="color:var(--fat-clr)">0%</div>
+      </div>
+      <div class="ring-info">
+        <div class="ring-label">Fat</div>
+        <div class="ring-val" id="val-fat" style="color:var(--fat-clr)">0g</div>
+        <div class="ring-target" id="tgt-fat">/ 93g</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Log food -->
+  <div class="section-header">Log Food</div>
+  <div class="log-card">
+    <div class="search-wrap">
+      <span class="search-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+      </span>
+      <input type="text" id="foodSearch" placeholder="Search food…" autocomplete="off"
+        oninput="filterFoods()" onfocus="openDropdown()" onblur="setTimeout(closeDropdown,150)">
+    </div>
+    <div class="dropdown" id="dropdown"></div>
+    <div class="food-preview" id="foodPreview">Select a food above</div>
+
+    <div class="stepper-row">
+      <span class="stepper-label">Handfuls</span>
+      <div class="stepper">
+        <button class="stepper-btn" onclick="changeHandfuls(-0.25)">−</button>
+        <div class="stepper-val" id="handfulVal">1.0</div>
+        <button class="stepper-btn" onclick="changeHandfuls(0.25)">+</button>
+      </div>
+    </div>
+
+    <div class="macro-preview" id="macroPreview">
+      <div class="mp-item"><div class="mp-val" id="mp-cal" style="color:var(--cal-clr)">—</div><div class="mp-lbl">kcal</div></div>
+      <div class="mp-item"><div class="mp-val" id="mp-pro" style="color:var(--pro-clr)">—</div><div class="mp-lbl">protein</div></div>
+      <div class="mp-item"><div class="mp-val" id="mp-carb" style="color:var(--carb-clr)">—</div><div class="mp-lbl">carbs</div></div>
+      <div class="mp-item"><div class="mp-val" id="mp-fat" style="color:var(--fat-clr)">—</div><div class="mp-lbl">fat</div></div>
+    </div>
+
+    <button class="log-btn" id="logBtn" onclick="logFood()" disabled>Log Entry</button>
+  </div>
+
+  <!-- Today's entries -->
+  <div class="section-header">Today's Log</div>
+  <div id="entryList"></div>
+  <div id="actionRow"></div>
+</div>
+
+<!-- Charts page -->
+<div id="page-charts" class="page">
+  <div class="section-header" style="margin-top:8px">Last 7 Days</div>
+  <div id="chartsContent"></div>
+</div>
+
+<!-- Settings page -->
+<div id="page-settings" class="page">
+  <div class="section-header" style="margin-top:8px">Daily Targets</div>
+  <div class="settings-card">
+    <div class="setting-row">
+      <span class="setting-label">Calories</span>
+      <input class="setting-input" id="s-cal" type="number" value="2800">
+    </div>
+    <div class="setting-row">
+      <span class="setting-label">Protein (g)</span>
+      <input class="setting-input" id="s-pro" type="number" value="170">
+    </div>
+    <div class="setting-row">
+      <span class="setting-label">Carbs (g)</span>
+      <input class="setting-input" id="s-carb" type="number" value="320">
+    </div>
+    <div class="setting-row">
+      <span class="setting-label">Fat (g)</span>
+      <input class="setting-input" id="s-fat" type="number" value="93">
+    </div>
+  </div>
+  <div class="section-header">Handful Size</div>
+  <div class="settings-card">
+    <div class="setting-row">
+      <span class="setting-label">Volume (ml)</span>
+      <input class="setting-input" id="s-handful" type="number" value="70">
+    </div>
+  </div>
+  <button class="save-btn" onclick="saveSettings()">Save Targets</button>
+</div>
+
+<!-- Nav -->
+<nav class="nav">
+  <button class="nav-btn active" id="nav-log" onclick="switchPage('log')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 5v14M5 12h14"/>
+    </svg>
+    Log
+  </button>
+  <button class="nav-btn" id="nav-charts" onclick="switchPage('charts')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+    </svg>
+    Progress
+  </button>
+  <button class="nav-btn" id="nav-settings" onclick="switchPage('settings')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+    Settings
+  </button>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = "https://script.google.com/macros/s/AKfycbwRBzTZAhIws5WTecWFSC9xVxr3hD-QR8xekCxmlQPr9R-S-zTrSPbjPGocjwh-vwLA/exec";
+
+let foods = [], log = [];
+let selectedFood = null;
+let handfuls = 1.0;
+let targets = { cal: 2800, pro: 170, carb: 320, fat: 93 };
+let handfulMl = 70;
+
+// ── Init ────────────────────────────────────────────────────────────────────
+function init() {
+  // Date label
+  const now = new Date();
+  document.getElementById('dateLabel').textContent =
+    now.toLocaleDateString('en-CA', { weekday:'long', month:'long', day:'numeric' });
+
+  // Load settings from localStorage
+  const saved = localStorage.getItem('macroTargets');
+  if (saved) {
+    const t = JSON.parse(saved);
+    targets = t;
+    document.getElementById('s-cal').value  = t.cal;
+    document.getElementById('s-pro').value  = t.pro;
+    document.getElementById('s-carb').value = t.carb;
+    document.getElementById('s-fat').value  = t.fat;
+  }
+  const savedHandful = localStorage.getItem('handfulMl');
+  if (savedHandful) {
+    handfulMl = parseFloat(savedHandful);
+    document.getElementById('s-handful').value = handfulMl;
+  }
+
+  loadAll();
+}
+
+async function loadAll() {
+  try {
+    const [refRes, logRes] = await Promise.all([
+      fetch(`${API}?action=getReference`),
+      fetch(`${API}?action=getLog`)
+    ]);
+    const refData = await refRes.json();
+    const logData = await logRes.json();
+    foods = refData.foods || [];
+    log   = logData.log   || [];
+    renderLog();
+    renderRings();
+    renderCharts();
+    populateDropdown(foods);
+  } catch(e) {
+    showToast('Could not reach server', 'error');
+  }
+}
+
+// ── Nav ─────────────────────────────────────────────────────────────────────
+function switchPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.getElementById('nav-' + name).classList.add('active');
+  if (name === 'charts') renderCharts();
+}
+
+// ── Food search ──────────────────────────────────────────────────────────────
+function populateDropdown(list) {
+  const dd = document.getElementById('dropdown');
+  dd.innerHTML = list.slice(0, 30).map(f => `
+    <div class="dropdown-item" onmousedown="selectFood('${f.food.replace(/'/g,"\\'")}')">
+      <span>${f.food}</span>
+      <span class="item-cat cat-${f.category}">${f.category}</span>
+    </div>`).join('');
+}
+
+function filterFoods() {
+  const q = document.getElementById('foodSearch').value.toLowerCase();
+  const filtered = foods.filter(f => f.food.toLowerCase().includes(q));
+  populateDropdown(filtered);
+  document.getElementById('dropdown').classList.add('open');
+}
+
+function openDropdown()  {
+  filterFoods();
+  document.getElementById('dropdown').classList.add('open');
+}
+function closeDropdown() { document.getElementById('dropdown').classList.remove('open'); }
+
+function selectFood(name) {
+  selectedFood = foods.find(f => f.food === name);
+  document.getElementById('foodSearch').value = name;
+  document.getElementById('foodPreview').textContent = name;
+  document.getElementById('foodPreview').classList.add('visible');
+  closeDropdown();
+  updatePreview();
+  document.getElementById('logBtn').disabled = false;
+}
+
+// ── Handful stepper ──────────────────────────────────────────────────────────
+function changeHandfuls(delta) {
+  handfuls = Math.max(0.25, Math.min(5.0, Math.round((handfuls + delta) * 4) / 4));
+  document.getElementById('handfulVal').textContent = handfuls.toFixed(2).replace(/\.?0+$/, '') + (Number.isInteger(handfuls) ? '.0' : '');
+  document.getElementById('handfulVal').textContent = handfuls % 1 === 0 ? handfuls.toFixed(1) : handfuls.toString();
+  updatePreview();
+}
+
+function updatePreview() {
+  if (!selectedFood) return;
+  const m = (handfulMl / 100) * handfuls;
+  const pro  = +(selectedFood.protein * m).toFixed(1);
+  const carb = +(selectedFood.carbs   * m).toFixed(1);
+  const fat  = +(selectedFood.fat     * m).toFixed(1);
+  const cal  = Math.round(pro*4 + carb*4 + fat*9);
+  document.getElementById('mp-cal').textContent  = cal;
+  document.getElementById('mp-pro').textContent  = pro + 'g';
+  document.getElementById('mp-carb').textContent = carb + 'g';
+  document.getElementById('mp-fat').textContent  = fat + 'g';
+}
+
+// ── Log food ─────────────────────────────────────────────────────────────────
+async function logFood() {
+  if (!selectedFood) return;
+  const btn = document.getElementById('logBtn');
+  btn.innerHTML = '<span class="spinner"></span>';
+  btn.disabled = true;
+  try {
+    const res = await fetch(API, {
+      method: 'POST',
+      body: JSON.stringify({ action:'logFood', food: selectedFood.food, handfuls })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(`+${data.calories} kcal logged ✓`, 'success');
+      await loadAll();
+      // reset
+      selectedFood = null;
+      handfuls = 1.0;
+      document.getElementById('foodSearch').value = '';
+      document.getElementById('foodPreview').classList.remove('visible');
+      document.getElementById('handfulVal').textContent = '1.0';
+      document.getElementById('mp-cal').textContent  = '—';
+      document.getElementById('mp-pro').textContent  = '—';
+      document.getElementById('mp-carb').textContent = '—';
+      document.getElementById('mp-fat').textContent  = '—';
+    } else {
+      showToast('Log failed', 'error');
+    }
+  } catch(e) {
+    showToast('Connection error', 'error');
+  }
+  btn.innerHTML = 'Log Entry';
+  btn.disabled = false;
+}
+
+// ── Rings ────────────────────────────────────────────────────────────────────
+function renderRings() {
+  const today = new Date().toISOString().split('T')[0];
+  const todayLog = log.filter(e => e.date === today);
+  const totals = { cal:0, pro:0, carb:0, fat:0 };
+  todayLog.forEach(e => {
+    totals.cal  += +e.calories;
+    totals.pro  += +e.protein;
+    totals.carb += +e.carbs;
+    totals.fat  += +e.fat;
+  });
+
+  const C = 188.5; // 2πr for r=30
+  [
+    ['cal',  totals.cal,  targets.cal,  'kcal'],
+    ['pro',  totals.pro,  targets.pro,  'g'],
+    ['carb', totals.carb, targets.carb, 'g'],
+    ['fat',  totals.fat,  targets.fat,  'g'],
+  ].forEach(([key, val, tgt, unit]) => {
+    const pct = Math.min(val / tgt, 1);
+    const offset = C - (C * pct);
+    document.getElementById(`ring-${key}`).style.strokeDashoffset = offset;
+    document.getElementById(`pct-${key}`).textContent = Math.round(pct * 100) + '%';
+    document.getElementById(`val-${key}`).textContent = Math.round(val) + (unit === 'g' ? 'g' : '');
+    document.getElementById(`tgt-${key}`).textContent = `/ ${tgt}${unit}`;
+  });
+}
+
+// ── Today's log ──────────────────────────────────────────────────────────────
+function renderLog() {
+  const today = new Date().toISOString().split('T')[0];
+  const todayLog = log.filter(e => e.date === today).reverse();
+  const el = document.getElementById('entryList');
+  const ar = document.getElementById('actionRow');
+
+  if (todayLog.length === 0) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">🍽️</div>Nothing logged yet.<br>Search a food above to get started.</div>`;
+    ar.innerHTML = '';
+    return;
+  }
+
+  el.innerHTML = todayLog.map(e => `
+    <div class="entry">
+      <div class="entry-left">
+        <div class="entry-food">${e.food}</div>
+        <div class="entry-sub">${e.handfuls} handful${e.handfuls != 1 ? 's' : ''} · ${e.protein}g P · ${e.carbs}g C · ${e.fat}g F</div>
+      </div>
+      <div class="entry-cal">${e.calories}</div>
+    </div>`).join('');
+
+  ar.innerHTML = `<div class="action-row">
+    <button class="action-btn" onclick="undoLast()">↩ Undo Last</button>
+    <button class="action-btn danger" onclick="clearDay()">🗑 Clear Day</button>
+  </div>`;
+}
+
+async function undoLast() {
+  try {
+    await fetch(API, { method:'POST', body: JSON.stringify({ action:'undoLast' }) });
+    showToast('Last entry removed');
+    await loadAll();
+  } catch(e) { showToast('Error', 'error'); }
+}
+
+async function clearDay() {
+  if (!confirm('Clear all entries for today?')) return;
+  const today = new Date().toISOString().split('T')[0];
+  try {
+    await fetch(API, { method:'POST', body: JSON.stringify({ action:'clearDay', date: today }) });
+    showToast('Today cleared');
+    await loadAll();
+  } catch(e) { showToast('Error', 'error'); }
+}
+
+// ── Charts ───────────────────────────────────────────────────────────────────
+function renderCharts() {
+  const el = document.getElementById('chartsContent');
+  if (log.length === 0) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">📈</div>Log some food first.<br>Your history will show up here.</div>`;
+    return;
+  }
+
+  // Group by date, last 7 days
+  const byDate = {};
+  log.forEach(e => {
+    if (!byDate[e.date]) byDate[e.date] = { cal:0, pro:0, carb:0, fat:0 };
+    byDate[e.date].cal  += +e.calories;
+    byDate[e.date].pro  += +e.protein;
+    byDate[e.date].carb += +e.carbs;
+    byDate[e.date].fat  += +e.fat;
+  });
+
+  const dates = Object.keys(byDate).sort().slice(-7);
+
+  function makeChart(label, key, tgt, color) {
+    const bars = dates.map(d => {
+      const val = byDate[d][key] || 0;
+      const pct = Math.min((val / tgt) * 100, 100);
+      const shortDate = d.slice(5).replace('-', '/');
+      return `<div class="bar-row">
+        <div class="bar-date">${shortDate}</div>
+        <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div>
+        <div class="bar-lbl">${Math.round(val)}</div>
+      </div>`;
+    }).join('');
+
+    return `<div class="chart-card">
+      <div class="chart-title">${label} (target: ${tgt})</div>
+      <div class="bar-chart">${bars}</div>
+    </div>`;
+  }
+
+  el.innerHTML =
+    makeChart('Calories', 'cal',  targets.cal,  'var(--cal-clr)')  +
+    makeChart('Protein (g)', 'pro', targets.pro,  'var(--pro-clr)')  +
+    makeChart('Carbs (g)',   'carb',targets.carb, 'var(--carb-clr)') +
+    makeChart('Fat (g)',     'fat', targets.fat,  'var(--fat-clr)');
+}
+
+// ── Settings ─────────────────────────────────────────────────────────────────
+function saveSettings() {
+  targets = {
+    cal:  +document.getElementById('s-cal').value,
+    pro:  +document.getElementById('s-pro').value,
+    carb: +document.getElementById('s-carb').value,
+    fat:  +document.getElementById('s-fat').value,
+  };
+  handfulMl = +document.getElementById('s-handful').value;
+  localStorage.setItem('macroTargets', JSON.stringify(targets));
+  localStorage.setItem('handfulMl', handfulMl);
+  renderRings();
+  renderCharts();
+  showToast('Settings saved ✓', 'success');
+}
+
+// ── Toast ────────────────────────────────────────────────────────────────────
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 2500);
+}
+
+init();
+</script>
+</body>
+</html>
