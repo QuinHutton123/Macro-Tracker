@@ -141,14 +141,14 @@
   /* Dropdown */
   .dropdown {
     background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius-sm); overflow-y: auto; max-height: 200px;
-    margin-top: 4px; display: none;
+    border-radius: var(--radius-sm); overflow-y: auto; max-height: 240px;
+    margin-top: 4px; display: none; position: relative; z-index: 99;
   }
   .dropdown.open { display: block; }
   .dropdown-item {
-    padding: 11px 14px; font-size: 14px; cursor: pointer;
+    padding: 13px 14px; font-size: 14px; cursor: pointer;
     border-bottom: 1px solid var(--border); display: flex; justify-content: space-between;
-    align-items: center; transition: background 0.15s;
+    align-items: center; transition: background 0.15s; user-select: none;
   }
   .dropdown-item:last-child { border-bottom: none; }
   .dropdown-item:active { background: var(--border); }
@@ -388,8 +388,8 @@
           <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
         </svg>
       </span>
-      <input type="text" id="foodSearch" placeholder="Search food…" autocomplete="off"
-        oninput="filterFoods()" onfocus="openDropdown()" onblur="setTimeout(closeDropdown,150)">
+      <input type="text" id="foodSearch" placeholder="Type to search… e.g. egg" autocomplete="off"
+        oninput="filterFoods()" onfocus="filterFoods()">
     </div>
     <div class="dropdown" id="dropdown"></div>
     <div class="food-preview" id="foodPreview">Select a food above</div>
@@ -450,7 +450,7 @@
   <div class="settings-card">
     <div class="setting-row">
       <span class="setting-label">Volume (ml)</span>
-      <input class="setting-input" id="s-handful" type="number" value="70">
+      <input class="setting-input" id="s-handful" type="number" value="100">
     </div>
   </div>
   <button class="save-btn" onclick="saveSettings()">Save Targets</button>
@@ -488,7 +488,7 @@ let foods = [], log = [];
 let selectedFood = null;
 let handfuls = 1.0;
 let targets = { cal: 2800, pro: 170, carb: 320, fat: 93 };
-let handfulMl = 70;
+let handfulMl = 100;
 
 // ── Init ────────────────────────────────────────────────────────────────────
 function init() {
@@ -545,34 +545,63 @@ function switchPage(name) {
 }
 
 // ── Food search ──────────────────────────────────────────────────────────────
+// Close dropdown when tapping outside
+document.addEventListener('touchstart', function(e) {
+  const wrap = document.querySelector('.search-wrap');
+  const dd   = document.getElementById('dropdown');
+  if (wrap && !wrap.contains(e.target) && !dd.contains(e.target)) {
+    dd.classList.remove('open');
+  }
+});
+document.addEventListener('click', function(e) {
+  const wrap = document.querySelector('.search-wrap');
+  const dd   = document.getElementById('dropdown');
+  if (wrap && !wrap.contains(e.target) && !dd.contains(e.target)) {
+    dd.classList.remove('open');
+  }
+});
+
 function populateDropdown(list) {
   const dd = document.getElementById('dropdown');
-  dd.innerHTML = list.slice(0, 30).map(f => `
-    <div class="dropdown-item" onmousedown="selectFood('${f.food.replace(/'/g,"\\'")}')">
+  if (list.length === 0) {
+    dd.innerHTML = `<div class="dropdown-item" style="color:var(--muted);cursor:default">No matches found</div>`;
+    dd.classList.add('open');
+    return;
+  }
+  dd.innerHTML = list.slice(0, 40).map(f => {
+    const safeName = f.food.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    return `<div class="dropdown-item" ontouchstart="selectFood('${safeName}')" onclick="selectFood('${safeName}')">
       <span>${f.food}</span>
       <span class="item-cat cat-${f.category}">${f.category}</span>
-    </div>`).join('');
+    </div>`;
+  }).join('');
+  dd.classList.add('open');
 }
 
 function filterFoods() {
-  const q = document.getElementById('foodSearch').value.toLowerCase();
-  const filtered = foods.filter(f => f.food.toLowerCase().includes(q));
-  populateDropdown(filtered);
-  document.getElementById('dropdown').classList.add('open');
+  const q = document.getElementById('foodSearch').value.toLowerCase().trim();
+  // Split query into words — all words must appear somewhere in the food name or category
+  const words = q.split(/\s+/).filter(Boolean);
+  const filtered = foods.filter(f => {
+    const haystack = (f.food + ' ' + f.category).toLowerCase();
+    return words.every(w => haystack.includes(w));
+  });
+  // Sort: items that START with the query first
+  filtered.sort((a, b) => {
+    const aStarts = a.food.toLowerCase().startsWith(q) ? 0 : 1;
+    const bStarts = b.food.toLowerCase().startsWith(q) ? 0 : 1;
+    return aStarts - bStarts;
+  });
+  populateDropdown(filtered.length ? filtered : foods); // show all if empty query
 }
-
-function openDropdown()  {
-  filterFoods();
-  document.getElementById('dropdown').classList.add('open');
-}
-function closeDropdown() { document.getElementById('dropdown').classList.remove('open'); }
 
 function selectFood(name) {
   selectedFood = foods.find(f => f.food === name);
+  if (!selectedFood) return;
   document.getElementById('foodSearch').value = name;
   document.getElementById('foodPreview').textContent = name;
   document.getElementById('foodPreview').classList.add('visible');
-  closeDropdown();
+  document.getElementById('dropdown').classList.remove('open');
   updatePreview();
   document.getElementById('logBtn').disabled = false;
 }
